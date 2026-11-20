@@ -4,25 +4,45 @@
 // One HTTP GET. Returns status code and decoded JSON body.
 function github_get($url)
 {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_HTTPHEADER     => [
-            'User-Agent: CodeClock',                 // GitHub requires a User-Agent
-            'Accept: application/vnd.github+json',
-        ],
-    ]);
-    $response = curl_exec($ch);
+    $headers = ['User-Agent: CodeClock', 'Accept: application/vnd.github+json'];
 
-    if ($response === false) {
-        $error = curl_error($ch);
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_HTTPHEADER     => $headers,
+        ]);
+        $response = curl_exec($ch);
+        if ($response === false) {
+            $error = curl_error($ch);
+            curl_close($ch);
+            throw new Exception('Could not reach GitHub: ' . $error);
+        }
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        throw new Exception('Could not reach GitHub: ' . $error);
+    } else {
+        // Fallback without cURL. HTTPS streams need the openssl extension.
+        if (!extension_loaded('openssl')) {
+            throw new Exception('Neither cURL nor OpenSSL is enabled in PHP.');
+        }
+        $context = stream_context_create(['http' => [
+            'method'        => 'GET',
+            'header'        => implode("\r\n", $headers),
+            'timeout'       => 15,
+            'ignore_errors' => true,   // still give us the body on 404 etc.
+        ]]);
+        $response = @file_get_contents($url, false, $context);
+        if ($response === false || empty($http_response_header)) {
+            throw new Exception('Could not reach GitHub.');
+        }
+        $status = 0;
+        foreach ($http_response_header as $line) {
+            if (preg_match('#^HTTP/\S+\s+(\d{3})#', $line, $m)) {
+                $status = (int)$m[1];   // the last status line wins
+            }
+        }
     }
-
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     return ['status' => $status, 'body' => json_decode($response, true)];
 }
