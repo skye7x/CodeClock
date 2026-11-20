@@ -1,1 +1,6 @@
-config.php
+codeclock-app/config/config.php
+codeclock-app/logs/*
+!codeclock-app/logs/.gitkeep
+.idea/
+.vscode/
+*.zip
