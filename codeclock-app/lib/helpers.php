@@ -24,12 +24,15 @@ function redirect($url)
 
 function json_response($data, $status = 200)
 {
+    if (ob_get_length()) {
+        ob_clean();
+    }
+
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($data);
     exit;
 }
-
 function app_log($message)
 {
     error_log(date('Y-m-d H:i:s') . ' ' . $message . "\n", 3, LOG_PATH . '/app.log');

@@ -1,4 +1,5 @@
 <?php
+ob_start();
 require_once __DIR__ . '/../bootstrap.php';
 require_once APP_PATH . '/lib/sync.php';
 

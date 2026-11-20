@@ -1,4 +1,5 @@
 <?php
+ob_start();
 require_once __DIR__ . '/../bootstrap.php';
 
 if (!current_user_id()) {
