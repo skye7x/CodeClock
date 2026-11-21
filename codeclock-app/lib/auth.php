@@ -1,16 +1,44 @@
 <?php
 // Sessions, CSRF protection and login throttling.
+require_once __DIR__ . '/ratelimit.php';
+
+// A valid bcrypt hash of a throw-away password. Used when the e-mail is unknown, so the
+// login takes the same time whether or not the account exists.
+const DUMMY_PASSWORD_HASH = '$2y$10$nahoDpNcb.gNQam48v0oz.Cs3BdxqevT5VV0xMfjgSaZTgTBa2FX2';
 
 if (session_status() === PHP_SESSION_NONE) {
+    $isDev   = defined('APP_ENV') && APP_ENV === 'dev';
     $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $idle    = defined('SESSION_IDLE_SECONDS') ? (int)SESSION_IDLE_SECONDS : 43200;   // 12 h
+
+    session_name('codeclock_sid');                    // not the shared default PHPSESSID
+    ini_set('session.use_strict_mode', '1');          // refuse session ids the server never issued
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
+    ini_set('session.gc_maxlifetime', (string)$idle);
+
+    // Private session folder (not the shared /tmp). Skipped if it does not exist.
+    $savePath = defined('SESSION_SAVE_PATH') ? SESSION_SAVE_PATH : (defined('APP_PATH') ? APP_PATH . '/sessions' : '');
+    if ($savePath !== '' && is_dir($savePath) && is_writable($savePath)) {
+        session_save_path($savePath);
+    }
+
     session_set_cookie_params([
         'lifetime' => 0,
-        'path'     => '/',
-        'secure'   => $isHttps,
+        'path'     => defined('SESSION_PATH') ? SESSION_PATH : '/',
+        // Production is HTTPS-only. Only 'dev' may use a cookie without the Secure flag.
+        'secure'   => $isHttps || !$isDev,
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
     session_start();
+
+    // Idle timeout: an abandoned session stops working even if the cookie survives.
+    if (isset($_SESSION['last_seen']) && time() - (int)$_SESSION['last_seen'] > $idle) {
+        $_SESSION = [];
+        session_regenerate_id(true);
+    }
+    $_SESSION['last_seen'] = time();
 }
 
 // ---------- CSRF ----------
@@ -57,12 +85,25 @@ function require_login()
 function login_user($userId)
 {
     session_regenerate_id(true);   // new session id after login
+    unset($_SESSION['csrf']);      // and a new CSRF token
     $_SESSION['user_id'] = (int)$userId;
 }
 
 function logout_user()
 {
     $_SESSION = [];
+    // Also tell the browser to drop the cookie, not only the server-side data.
+    if (ini_get('session.use_cookies')) {
+        $p = session_get_cookie_params();
+        setcookie(session_name(), '', [
+            'expires'  => time() - 42000,
+            'path'     => $p['path'],
+            'domain'   => $p['domain'],
+            'secure'   => $p['secure'],
+            'httponly' => $p['httponly'],
+            'samesite' => $p['samesite'] ?? 'Lax',
+        ]);
+    }
     session_destroy();
 }
 
@@ -83,38 +124,35 @@ function api_guard()
 }
 
 // ---------- Login throttling ----------
+// Three counters per 15 minutes, all stored as hashes (no e-mail addresses in the table):
+//   per IP            20  - stops one machine guessing at many accounts
+//   per e-mail + IP    5  - stops one machine guessing at one account
+//   per e-mail        50  - last-resort cap against a spread-out (botnet) attack
+// The per-e-mail + IP key means a stranger can NOT lock the real owner out from their own IP.
 function client_ip()
 {
     return substr($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0', 0, 45);
 }
 
-function too_many_attempts($email, $ip)
+function login_keys($email, $ip)
 {
-    $st = db()->prepare(
-        'SELECT COUNT(*) FROM login_attempts
-         WHERE email = ? AND attempted_at > (UTC_TIMESTAMP() - INTERVAL 15 MINUTE)'
-    );
-    $st->execute([$email]);
-    if ($st->fetchColumn() >= 5) {
-        return true;
-    }
-
-    $st = db()->prepare(
-        'SELECT COUNT(*) FROM login_attempts
-         WHERE ip_address = ? AND attempted_at > (UTC_TIMESTAMP() - INTERVAL 15 MINUTE)'
-    );
-    $st->execute([$ip]);
-    return $st->fetchColumn() >= 20;
+    $emailKey = substr(hash('sha256', $email), 0, 32);
+    return [$emailKey, substr(hash('sha256', $email . '|' . $ip), 0, 32)];
 }
 
-function record_failed_attempt($email, $ip)
+// Records the attempt FIRST, then says if it may go ahead. Call it before checking the password.
+function login_attempt_allowed($email, $ip)
 {
-    $st = db()->prepare('INSERT INTO login_attempts (email, ip_address) VALUES (?, ?)');
-    $st->execute([$email, $ip]);
+    list($emailKey, $pairKey) = login_keys($email, $ip);
+
+    return rate_limit_hit('login:ip', $ip, 20, 900)
+        && rate_limit_hit('login:email', $emailKey, 50, 900)
+        && rate_limit_hit('login:pair', $pairKey, 5, 900);
 }
 
-function clear_attempts($email)
+// After a correct password the owner starts again from zero.
+function login_attempt_succeeded($email, $ip)
 {
-    $st = db()->prepare('DELETE FROM login_attempts WHERE email = ?');
-    $st->execute([$email]);
+    list(, $pairKey) = login_keys($email, $ip);
+    rate_limit_clear('login:pair', $pairKey);
 }

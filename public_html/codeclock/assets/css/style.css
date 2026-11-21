@@ -26,3 +26,6 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e5e7eb; }
 .bar-wrap { background: #e5e7eb; border-radius: 4px; height: 18px; }
 .bar { background: #2563eb; height: 18px; border-radius: 4px; }
 .sha { font-family: monospace; }
+.timer-select { max-width: 300px; }
+.col-date { width: 110px; }
+.col-time { width: 90px; }

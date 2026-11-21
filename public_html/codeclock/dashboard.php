@@ -5,28 +5,44 @@ require_login();
 $userId = current_user_id();
 $errors = [];
 
+// Per-user caps, so one account cannot create thousands of projects or GitHub links.
+const MAX_PROJECTS_PER_USER = 50;
+const MAX_REPOS_PER_USER    = 20;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf_post();
-    $action = $_POST['action'] ?? '';
+    $action = input_str($_POST, 'action');
 
     if ($action === 'create') {
-        $name  = trim($_POST['name'] ?? '');
-        $owner = trim($_POST['repo_owner'] ?? '');
-        $repo  = trim($_POST['repo_name'] ?? '');
-        $pattern = '/^[A-Za-z0-9_.-]{1,100}$/';
+        $name  = trim(input_str($_POST, 'name'));
+        $owner = trim(input_str($_POST, 'repo_owner'));
+        $repo  = trim(input_str($_POST, 'repo_name'));
 
         if ($name === '' || mb_strlen($name) > 100) {
             $errors[] = 'Project name must be 1-100 characters.';
         }
-        if ($owner !== '' || $repo !== '') {
-            if (!preg_match($pattern, $owner) || !preg_match($pattern, $repo)) {
+        $hasRepo = ($owner !== '' || $repo !== '');
+        if ($hasRepo) {
+            if (!is_valid_github_name($owner) || !is_valid_github_name($repo)) {
                 $errors[] = 'Fill both repo owner and repo name (letters, numbers, - _ . only), or leave both empty.';
             }
         }
 
         if (!$errors) {
+            $st = db()->prepare('SELECT COUNT(*), COUNT(repo_owner) FROM projects WHERE user_id = ?');
+            $st->execute([$userId]);
+            list($projectCount, $repoCount) = $st->fetch(PDO::FETCH_NUM);
+
+            if ($projectCount >= MAX_PROJECTS_PER_USER) {
+                $errors[] = 'You reached the limit of ' . MAX_PROJECTS_PER_USER . ' projects. Delete one first.';
+            } elseif ($hasRepo && $repoCount >= MAX_REPOS_PER_USER) {
+                $errors[] = 'You reached the limit of ' . MAX_REPOS_PER_USER . ' projects linked to GitHub.';
+            }
+        }
+
+        if (!$errors) {
             $st = db()->prepare('INSERT INTO projects (user_id, name, repo_owner, repo_name) VALUES (?, ?, ?, ?)');
-            $st->execute([$userId, $name, $owner ?: null, $repo ?: null]);
+            $st->execute([$userId, $name, $owner !== '' ? $owner : null, $repo !== '' ? $repo : null]);
             redirect('dashboard.php');
         }
     } elseif ($action === 'delete') {
@@ -61,7 +77,7 @@ require APP_PATH . '/views/header.php';
   <p id="timer-label" class="muted">Loading...</p>
   <div class="timer-display" id="timer-display">00:00:00</div>
   <div class="row">
-    <select id="timer-project" style="max-width:300px">
+    <select id="timer-project" class="timer-select">
       <?php foreach ($projects as $p): ?>
         <option value="<?= (int)$p['id'] ?>"><?= e($p['name']) ?></option>
       <?php endforeach; ?>
@@ -85,7 +101,7 @@ require APP_PATH . '/views/header.php';
           <td><?= $p['repo_owner'] ? e($p['repo_owner'] . '/' . $p['repo_name']) : '<span class="muted">-</span>' ?></td>
           <td><?= e(format_duration($p['secs'])) ?></td>
           <td>
-            <form method="post" class="inline" onsubmit="return confirm('Delete this project and all its data?');">
+            <form method="post" class="inline" data-confirm="Delete this project and all its data?">
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="delete">
               <input type="hidden" name="project_id" value="<?= (int)$p['id'] ?>">

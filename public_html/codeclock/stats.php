@@ -52,11 +52,11 @@ require APP_PATH . '/views/header.php';
   <table>
     <?php foreach ($byDate as $date => $secs): ?>
       <tr>
-        <td style="width:110px"><?= e($date) ?></td>
+        <td class="col-date"><?= e($date) ?></td>
         <td>
-          <div class="bar-wrap"><div class="bar" style="width: <?= (int)round($secs / $max * 100) ?>%"></div></div>
+          <div class="bar-wrap"><div class="bar" data-width="<?= (int)round($secs / $max * 100) ?>"></div></div>
         </td>
-        <td style="width:90px"><?= e(format_duration($secs)) ?></td>
+        <td class="col-time"><?= e(format_duration($secs)) ?></td>
       </tr>
     <?php endforeach; ?>
   </table>

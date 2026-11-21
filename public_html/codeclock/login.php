@@ -11,24 +11,35 @@ $email = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf_post();
 
-    $email    = strtolower(trim($_POST['email'] ?? ''));
-    $password = $_POST['password'] ?? '';
+    $email    = strtolower(trim(input_str($_POST, 'email')));
+    $password = input_str($_POST, 'password');
     $ip       = client_ip();
 
-    if (too_many_attempts($email, $ip)) {
-        $errors[] = 'Too many failed attempts. Try again in 15 minutes.';
+    // The attempt is recorded BEFORE the password is checked, so parallel guesses are counted.
+    if (!login_attempt_allowed($email, $ip)) {
+        $errors[] = 'Too many attempts. Try again in 15 minutes.';
     } else {
-        $st = db()->prepare('SELECT id, password_hash FROM users WHERE email = ?');
-        $st->execute([$email]);
-        $user = $st->fetch();
+        $user = false;
+        if ($email !== '' && strlen($email) <= 255) {
+            $st = db()->prepare('SELECT id, password_hash FROM users WHERE email = ?');
+            $st->execute([$email]);
+            $user = $st->fetch();
+        }
 
-        if ($user && password_verify($password, $user['password_hash'])) {
-            clear_attempts($email);
+        // Unknown e-mail? Check against a dummy hash anyway, so the response time
+        // does not reveal which e-mails have an account.
+        $valid = password_verify($password, $user ? $user['password_hash'] : DUMMY_PASSWORD_HASH);
+
+        if ($user && $valid) {
+            if (password_needs_rehash($user['password_hash'], PASSWORD_DEFAULT)) {
+                db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+                    ->execute([password_hash($password, PASSWORD_DEFAULT), $user['id']]);
+            }
+            login_attempt_succeeded($email, $ip);
             login_user($user['id']);
             redirect('dashboard.php');
         }
 
-        record_failed_attempt($email, $ip);
         $errors[] = 'Wrong email or password.';   // same message for both cases on purpose
     }
 }
@@ -44,7 +55,7 @@ require APP_PATH . '/views/header.php';
   <form method="post">
     <?= csrf_field() ?>
     <label for="email">Email</label>
-    <input type="email" id="email" name="email" value="<?= e($email) ?>" required>
+    <input type="email" id="email" name="email" value="<?= e(mb_substr($email, 0, 255)) ?>" maxlength="255" required>
     <label for="password">Password</label>
     <input type="password" id="password" name="password" required>
     <p><button type="submit">Log in</button></p>
