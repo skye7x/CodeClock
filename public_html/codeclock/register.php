@@ -7,7 +7,6 @@ if (current_user_id()) {
 
 const MIN_PASSWORD_LENGTH = 10;
 
-// The most common passwords that still meet a 10-character minimum.
 const COMMON_PASSWORDS = [
     'password12', 'password123', 'password1234', '1234567890', '12345678910', '0123456789',
     'qwertyuiop', 'qwerty1234', 'qwerty12345', 'iloveyou12', 'letmein123', 'welcome123',
