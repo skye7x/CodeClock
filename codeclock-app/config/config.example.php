@@ -5,6 +5,7 @@ define('DB_USER', '');
 define('DB_PASS', '');
 define('DB_NAME', '');
 define('DB_CHARSET', '');
+// 'prod' is the safe default. Use 'dev' ONLY on your own computer:
 
 define('APP_ENV', 'prod');
 
