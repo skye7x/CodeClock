@@ -1,7 +1,4 @@
 <?php
-// Run from cPanel cron, e.g. every 30 minutes:
-//   /usr/local/bin/php /home/USER/codeclock-app/cron/sync_commits.php
-// Syncs the 10 projects whose last sync ATTEMPT is the oldest.
 if (php_sapi_name() !== 'cli') {
     http_response_code(403);
     exit('CLI only');
@@ -11,12 +8,8 @@ require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_once __DIR__ . '/../lib/sync.php';
 
-// Housekeeping: old throttling rows.
 rate_limit_purge();
 
-// Order by the last ATTEMPT (success or failure), never by the last success. That way a
-// repo that fails cannot sit at the front of the queue and push everyone else out.
-// A project that failed 5 times in a row is only retried once a day.
 $st = db()->query(
     "SELECT id FROM projects
      WHERE repo_owner IS NOT NULL AND repo_name IS NOT NULL

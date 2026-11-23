@@ -4,10 +4,8 @@ require_once __DIR__ . '/../bootstrap.php';
 require_once APP_PATH . '/lib/sync.php';
 
 $userId = api_guard();
-$projectId = (int)($_POST['project_id'] ?? 0);
+$projectId = (int)input_str($_POST, 'project_id');
 
-// A sync can take a minute. Release the session lock now, or every other request
-// from this user (even the timer) would wait until the sync is finished.
 session_write_close();
 
 $st = db()->prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?');

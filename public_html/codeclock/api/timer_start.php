@@ -3,13 +3,11 @@ ob_start();
 require_once __DIR__ . '/../bootstrap.php';
 
 $userId = api_guard();
-$projectId = (int)($_POST['project_id'] ?? 0);
+$projectId = (int)input_str($_POST, 'project_id');
 
 $pdo = db();
 $error = null;   // [message, http status]
 
-// Check + insert must be ONE atomic step. Locking the user's row makes two parallel
-// requests (two devices, two browsers) wait for each other, so only one can start a timer.
 $pdo->beginTransaction();
 try {
     $pdo->prepare('SELECT id FROM users WHERE id = ? FOR UPDATE')->execute([$userId]);

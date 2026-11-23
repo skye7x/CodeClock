@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'delete') {
         $st = db()->prepare('DELETE FROM projects WHERE id = ? AND user_id = ?');
-        $st->execute([(int)($_POST['project_id'] ?? 0), $userId]);
+        $st->execute([(int)input_str($_POST, 'project_id'), $userId]);
         redirect('dashboard.php');
     }
 }

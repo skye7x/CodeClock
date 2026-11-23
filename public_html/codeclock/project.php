@@ -3,7 +3,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_login();
 
 $userId = current_user_id();
-$projectId = (int)($_GET['id'] ?? 0);
+$projectId = (int)input_str($_GET, 'id');
 
 // Only the owner can open a project.
 $st = db()->prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?');

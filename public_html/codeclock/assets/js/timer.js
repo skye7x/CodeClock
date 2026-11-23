@@ -1,5 +1,3 @@
-// Start/stop timer. The elapsed time is calculated from the server's start
-// time, so refreshing the page does not reset it.
 (function () {
   var csrf = document.querySelector('meta[name="csrf"]').content;
   var display = document.getElementById('timer-display');
@@ -33,6 +31,10 @@
   function render(status) {
     clearInterval(ticker);
     message.textContent = '';
+    if (status.error) {   // e.g. the session expired: go back to the login page
+      window.location.href = 'login.php';
+      return;
+    }
     if (status.running) {
       startedMs = new Date(status.started_at).getTime();
       offsetMs = new Date(status.server_now).getTime() - Date.now();
@@ -40,6 +42,7 @@
       showTime();
       ticker = setInterval(showTime, 1000);
       startBtn.disabled = true;
+      select.value = String(status.project_id);   // show the project that is really running
       select.disabled = true;
       stopBtn.disabled = false;
     } else {
@@ -51,24 +54,32 @@
     }
   }
 
-  function loadStatus() {
+  // $notice (optional) is shown AFTER the status is drawn; render() clears the message line,
+  // so an error set before loadStatus() used to disappear immediately.
+  function loadStatus(notice) {
     fetch('api/timer_status.php', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
-      .then(render)
+      .then(function (status) {
+        render(status);
+        if (notice) { message.textContent = notice; }
+      })
       .catch(function () { message.textContent = 'Could not load timer status.'; });
   }
 
   startBtn.addEventListener('click', function () {
     post('api/timer_start.php', { project_id: select.value }).then(function (res) {
-      if (res.error) { message.textContent = res.error; }
-      loadStatus();
+      loadStatus(res.error || '');
+    }).catch(function () {
+      message.textContent = 'Could not start the timer.';
     });
   });
 
   stopBtn.addEventListener('click', function () {
     post('api/timer_stop.php').then(function (res) {
-      if (res.error) { message.textContent = res.error; return; }
+      if (res.error) { loadStatus(res.error); return; }
       window.location.reload();   // refresh totals
+    }).catch(function () {
+      message.textContent = 'Could not stop the timer.';
     });
   });
 

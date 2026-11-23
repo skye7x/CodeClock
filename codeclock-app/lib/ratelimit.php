@@ -1,7 +1,4 @@
 <?php
-// Generic sliding-window rate limiter. Every event is one row in rate_events.
-// Used for login throttling, registration, manual syncs and the GitHub API budget.
-
 function rate_limit_count($action, $subject, $windowSeconds)
 {
     $st = db()->prepare(
@@ -19,9 +16,6 @@ function rate_limit_record($action, $subject)
     $st->execute([$action, substr((string)$subject, 0, 64)]);
 }
 
-// Counts one event and says whether the caller is still inside the limit.
-// The event is recorded BEFORE the count is read, so a burst of parallel requests
-// cannot all see "0 so far": at most $limit of them can ever get through.
 function rate_limit_hit($action, $subject, $limit, $windowSeconds)
 {
     // Flood guard: once a bucket is far over its limit, stop storing more rows.

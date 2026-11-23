@@ -1,7 +1,4 @@
 <?php
-// Small helper functions used on every page.
-
-// Anything other than the exact string 'dev' is treated as production.
 $ccIsDev = defined('APP_ENV') && APP_ENV === 'dev';
 
 error_reporting(E_ALL);

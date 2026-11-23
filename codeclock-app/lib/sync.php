@@ -1,18 +1,10 @@
 <?php
-// Downloads new commits for one project and saves them.
 require_once __DIR__ . '/github.php';
 
-// $source is 'web' (a visitor pressed the button) or 'cron'.
-// Returns the number of NEW commits.
-// Throws UserFacingException (safe to show) or another Exception (log it, show nothing).
 function sync_project($projectId, $source = 'web')
 {
     $pdo = db();
 
-    // Lock: only one sync per project at a time (a lock older than 5 minutes is ignored).
-    // The attempt time is stored right away, whether the sync later works or fails, so a
-    // broken repo goes to the back of the cron queue instead of blocking it.
-    // Visitors also wait 60 seconds between two syncs of the same project.
     $sql = 'UPDATE projects
             SET sync_started_at = UTC_TIMESTAMP(), last_sync_attempt_at = UTC_TIMESTAMP()
             WHERE id = ? AND (sync_started_at IS NULL OR sync_started_at < UTC_TIMESTAMP() - INTERVAL 5 MINUTE)';
@@ -34,8 +26,10 @@ function sync_project($projectId, $source = 'web')
             throw new UserFacingException('This project has no GitHub repo.');
         }
 
-        $startedAt = gmdate('Y-m-d H:i:s');   // saved as last_synced_at after success
-        $since = $project['last_synced_at'] ? str_replace(' ', 'T', $project['last_synced_at']) . 'Z' : null;
+        $startedAt = gmdate('Y-m-d H:i:s');
+        $since = $project['last_synced_at']
+            ? gmdate('Y-m-d\TH:i:s\Z', strtotime($project['last_synced_at'] . ' UTC') - 7 * 86400)
+            : null;
 
         $commits = github_fetch_commits($project['repo_owner'], $project['repo_name'], $since, $source);
 

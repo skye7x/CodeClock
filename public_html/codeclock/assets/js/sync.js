@@ -15,7 +15,9 @@
       headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ project_id: btn.dataset.project })
     })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        return r.json().catch(function () { return { error: 'Sync failed (HTTP ' + r.status + ').' }; });
+      })
       .then(function (res) {
         if (res.error) {
           msg.textContent = res.error;

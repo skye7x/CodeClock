@@ -1,5 +1,4 @@
 <?php
-// One shared database connection for the whole request.
 require_once __DIR__ . '/../config/config.php';
 
 date_default_timezone_set('UTC');
@@ -20,7 +19,6 @@ function db()
         ]);
         $pdo->exec("SET time_zone = '+00:00'");
     } catch (PDOException $e) {
-        // The real error goes to the log, the visitor sees nothing sensitive.
         error_log(date('Y-m-d H:i:s') . ' DB error: ' . $e->getMessage() . "\n", 3, LOG_PATH . '/app.log');
         http_response_code(500);
         exit('Database unavailable');

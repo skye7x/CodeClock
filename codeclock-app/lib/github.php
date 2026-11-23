@@ -1,19 +1,12 @@
 <?php
-// Talks to the GitHub REST API (public repos only for now).
 require_once __DIR__ . '/ratelimit.php';
 
-// An error whose message is safe and useful to show to the visitor.
-// Any other exception is logged and the visitor sees a generic message.
 class UserFacingException extends Exception {}
 
-// GitHub (or our own budget) says: stop for now. Not the project's fault.
 class GithubRateLimitException extends UserFacingException {}
 
 const GITHUB_MAX_BODY_BYTES = 2097152;   // 2 MB is far more than 100 commits ever need
 
-// How many GitHub requests per hour this server may make, split by who is asking.
-// Unauthenticated GitHub allows 60/hour per IP; with a token it is 5000/hour.
-// Visitors get the smaller share, so they can never use up what the cron job needs.
 function github_budget_limit($source)
 {
     $hasToken = defined('GITHUB_TOKEN') && GITHUB_TOKEN !== '';
@@ -23,10 +16,8 @@ function github_budget_limit($source)
     return $source === 'cron' ? 55 : 30;
 }
 
-// One HTTP GET. Returns status code and decoded JSON body.
 function github_get($url, $source = 'web')
 {
-    // Only ever talk to the GitHub API over HTTPS.
     $parts = parse_url($url);
     if (($parts['scheme'] ?? '') !== 'https' || ($parts['host'] ?? '') !== 'api.github.com') {
         throw new Exception('Refusing to request ' . $url);
@@ -73,7 +64,6 @@ function github_get($url, $source = 'web')
         if ($ok === false) {
             $error = curl_error($ch);
             curl_close($ch);
-            // Plain Exception on purpose: logged, not shown to the visitor.
             throw new Exception('Could not reach GitHub: ' . $error);
         }
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -107,8 +97,6 @@ function github_get($url, $source = 'web')
     return ['status' => $status, 'body' => json_decode($response, true)];
 }
 
-// Fetches commits (newest first). $since is an ISO date like 2026-11-01T00:00:00Z or null.
-// Gets at most 5 pages x 100 commits per call.
 function github_fetch_commits($owner, $repo, $since = null, $source = 'web')
 {
     // Checked again here, not only when the project is created: old rows may hold bad values.
