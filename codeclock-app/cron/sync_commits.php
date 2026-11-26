@@ -26,7 +26,7 @@ foreach ($st->fetchAll() as $row) {
         app_log('Cron sync project ' . $row['id'] . ': ' . $new . ' new commits');
     } catch (GithubRateLimitException $ex) {
         app_log('Cron stopped: ' . $ex->getMessage());
-        break;   // no point hammering GitHub for the other projects
+        break;
     } catch (Throwable $ex) {
         app_log('Cron sync project ' . $row['id'] . ' failed: ' . $ex->getMessage());
     }

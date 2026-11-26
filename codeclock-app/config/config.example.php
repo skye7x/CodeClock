@@ -1,5 +1,6 @@
 <?php
-// on the server: chmod 640.
+// Copy this file to config.php and put your real values in it.
+// config.php is in .gitignore - never commit it. On the server: chmod 640.
 define('DB_HOST', 'localhost');
 define('DB_USER', '');
 define('DB_PASS', '');
