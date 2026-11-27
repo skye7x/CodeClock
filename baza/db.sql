@@ -1,5 +1,6 @@
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
+USE codeclock_ref; -- your db
 
 CREATE TABLE IF NOT EXISTS users (
                        id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
