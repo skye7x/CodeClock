@@ -1,17 +1,18 @@
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
                        id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
                        email         VARCHAR(255) NOT NULL,
                        password_hash VARCHAR(255) NOT NULL,
                        github_token  TEXT NULL,                       -- store ENCRYPTED, never plain
+                       github_login  VARCHAR(100) NULL,               -- which GitHub account is "me": only these commits count
                        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                        PRIMARY KEY (id),
                        UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE projects (
+CREATE TABLE IF NOT EXISTS projects (
                           id                   INT UNSIGNED NOT NULL AUTO_INCREMENT,
                           user_id              INT UNSIGNED NOT NULL,
                           name                 VARCHAR(100) NOT NULL,
@@ -28,7 +29,7 @@ CREATE TABLE projects (
                           CONSTRAINT fk_projects_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
                           id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
                           project_id INT UNSIGNED NOT NULL,
                           started_at DATETIME NOT NULL,                  -- UTC, set by server
@@ -40,21 +41,23 @@ CREATE TABLE sessions (
                           CONSTRAINT fk_sessions_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE commits (
+CREATE TABLE IF NOT EXISTS commits (
                          id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
                          project_id  INT UNSIGNED NOT NULL,
                          sha         CHAR(40) NOT NULL,
                          message     VARCHAR(500) NULL,
+                         author_login VARCHAR(100) NULL,                -- GitHub login of the commit author (NULL = unknown)
                          author_date DATETIME NOT NULL,                 -- UTC
                          PRIMARY KEY (id),
                          UNIQUE KEY uq_commits_project_sha (project_id, sha),
                          KEY idx_commits_project_date (project_id, author_date),
+                         KEY idx_commits_author (project_id, author_login),
                          CONSTRAINT fk_commits_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Rate limiting: login attempts, registrations, manual syncs, GitHub API budget.
 -- "subject" holds an IP address or a hash, never a plain e-mail address.
-CREATE TABLE rate_events (
+CREATE TABLE IF NOT EXISTS rate_events (
                              id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                              action     VARCHAR(32) NOT NULL,
                              subject    VARCHAR(64) NOT NULL,
