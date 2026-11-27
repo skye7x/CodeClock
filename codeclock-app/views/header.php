@@ -14,6 +14,7 @@
     <nav>
       <a href="dashboard.php">Dashboard</a>
       <a href="stats.php">Stats</a>
+      <a href="settings.php">Settings</a>
       <form method="post" action="logout.php" class="inline">
         <?= csrf_field() ?>
         <button type="submit" class="link">Log out</button>

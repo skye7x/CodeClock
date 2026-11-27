@@ -7,11 +7,14 @@ function hours_per_project($userId)
     $st = db()->prepare(
         'SELECT p.id, p.name,
                 COALESCE(SUM(TIMESTAMPDIFF(SECOND, s.started_at, s.ended_at)), 0) AS secs,
-                (SELECT COUNT(*) FROM commits c WHERE c.project_id = p.id) AS commit_count
+                (SELECT COUNT(*) FROM commits c
+                  WHERE c.project_id = p.id
+                    AND (u.github_login IS NULL OR c.author_login = u.github_login)) AS commit_count
          FROM projects p
+         JOIN users u ON u.id = p.user_id
          LEFT JOIN sessions s ON s.project_id = p.id AND s.ended_at IS NOT NULL
          WHERE p.user_id = ?
-         GROUP BY p.id, p.name
+         GROUP BY p.id, p.name, u.github_login
          ORDER BY secs DESC'
     );
     $st->execute([$userId]);

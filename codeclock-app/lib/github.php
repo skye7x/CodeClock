@@ -104,7 +104,8 @@ function github_fetch_commits($owner, $repo, $since = null, $source = 'web')
         throw new UserFacingException('Invalid repository owner or name.');
     }
 
-    $commits = [];
+    $commits  = [];
+    $complete = false;   // true only if we reached the end of the history (nothing cut off by the page limit)
 
     for ($page = 1; $page <= 5; $page++) {
         $url = 'https://api.github.com/repos/' . rawurlencode($owner) . '/' . rawurlencode($repo)
@@ -119,6 +120,7 @@ function github_fetch_commits($owner, $repo, $since = null, $source = 'web')
             throw new UserFacingException('Repository not found (or it is private).');
         }
         if ($result['status'] === 409) {
+            $complete = true;
             break;   // GitHub answers 409 for an empty repository: no commits yet, not an error
         }
         if ($result['status'] === 403 || $result['status'] === 429) {
@@ -134,17 +136,30 @@ function github_fetch_commits($owner, $repo, $since = null, $source = 'web')
             if (!$date || empty($item['sha'])) {
                 continue;
             }
+
+            // Who wrote it? GitHub links a commit to an account only if the e-mail is verified,
+            // otherwise 'author' is null. Fallback: noreply e-mail "12345+login@users.noreply.github.com".
+            $login = $item['author']['login'] ?? null;
+            if (!$login) {
+                $email = $item['commit']['author']['email'] ?? '';
+                if (preg_match('/^(?:\d+\+)?([A-Za-z0-9-]+)@users\.noreply\.github\.com$/i', $email, $m)) {
+                    $login = $m[1];
+                }
+            }
+
             $commits[] = [
-                'sha'     => $item['sha'],
-                'message' => mb_substr($lines[0], 0, 500),
-                'date'    => gmdate('Y-m-d H:i:s', strtotime($date)),
+                'sha'          => $item['sha'],
+                'message'      => mb_substr($lines[0], 0, 500),
+                'date'         => gmdate('Y-m-d H:i:s', strtotime($date)),
+                'author_login' => $login ? mb_substr($login, 0, 100) : null,
             ];
         }
 
         if (count($result['body']) < 100) {
+            $complete = true;
             break;   // last page
         }
     }
 
-    return $commits;
+    return ['commits' => $commits, 'complete' => $complete];
 }

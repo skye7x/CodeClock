@@ -14,23 +14,33 @@ if (!$project) {
     exit('Project not found');
 }
 
+// Only commits by the user's own GitHub account count (see settings.php).
+// No login set = old behaviour: every commit of the repo.
+$st = db()->prepare('SELECT github_login FROM users WHERE id = ?');
+$st->execute([$userId]);
+$login     = $st->fetchColumn() ?: null;
+$authorSql = $login ? ' AND c.author_login = ?' : '';
+$authorArg = $login ? [$login] : [];
+
 // Sessions + how many commits fall inside each session's time range.
 $st = db()->prepare(
     'SELECT s.id, s.started_at, s.ended_at, s.note,
             TIMESTAMPDIFF(SECOND, s.started_at, COALESCE(s.ended_at, UTC_TIMESTAMP())) AS secs,
             (SELECT COUNT(*) FROM commits c
               WHERE c.project_id = s.project_id
-                AND c.author_date BETWEEN s.started_at AND s.ended_at) AS commit_count
+                AND c.author_date BETWEEN s.started_at AND s.ended_at' . $authorSql . ') AS commit_count
      FROM sessions s
      WHERE s.project_id = ?
      ORDER BY s.started_at DESC
      LIMIT 50'
 );
-$st->execute([$projectId]);
+$st->execute(array_merge($authorArg, [$projectId]));
 $sessions = $st->fetchAll();
 
-$st = db()->prepare('SELECT sha, message, author_date FROM commits WHERE project_id = ? ORDER BY author_date DESC LIMIT 50');
-$st->execute([$projectId]);
+$st = db()->prepare(
+    'SELECT sha, message, author_date FROM commits c WHERE c.project_id = ?' . $authorSql . ' ORDER BY author_date DESC LIMIT 50'
+);
+$st->execute(array_merge([$projectId], $authorArg));
 $commits = $st->fetchAll();
 
 $hasRepo = !empty($project['repo_owner']) && !empty($project['repo_name']);
@@ -51,6 +61,13 @@ require APP_PATH . '/views/header.php';
       <?php if ($project['last_synced_at']): ?>
         <span class="utc-time" data-utc="<?= e($project['last_synced_at']) ?>"><?= e($project['last_synced_at']) ?> UTC</span>
       <?php else: ?>never<?php endif; ?>
+    </p>
+    <p class="muted">
+      <?php if ($login): ?>
+        Counting commits by GitHub user <strong><?= e($login) ?></strong>.
+      <?php else: ?>
+        Counting <strong>all</strong> commits in the repo. <a href="settings.php">Set your GitHub login</a> to count only yours.
+      <?php endif; ?>
     </p>
     <button type="button" class="sync-btn" data-project="<?= (int)$project['id'] ?>">Sync commits</button>
     <span class="muted" id="sync-msg"></span>
