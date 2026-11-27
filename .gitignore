@@ -1,4 +1,5 @@
 codeclock-app/config/config.php
+codeclock-app/config/config_xampp.php
 codeclock-app/logs/*
 !codeclock-app/logs/.gitkeep
 codeclock-app/sessions/*
@@ -6,3 +7,4 @@ codeclock-app/sessions/*
 .idea/
 .vscode/
 *.zip
+config_xampp.php
